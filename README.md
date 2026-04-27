@@ -213,4 +213,3 @@ results/all_results.json
 | `figures/study3_clipping.pdf` | Accuracy + gradient norm vs clip threshold |
 | `figures/study4_depth.pdf` | Accuracy vs number of layers |
 
-```
