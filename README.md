@@ -213,24 +213,4 @@ results/all_results.json
 | `figures/study3_clipping.pdf` | Accuracy + gradient norm vs clip threshold |
 | `figures/study4_depth.pdf` | Accuracy vs number of layers |
 
----
-
-## Paper
-
-Submitted to the USYD Deep Learning Course Conference 2026 via OpenReview.  
-6–8 pages, double-column, DLCC LaTeX template.  
-**Final submission deadline: 24 May 2026, 23:59 Sydney time.**
-
----
-
-## Citation
-
-```
-@article{firmandika2026gradient,
-  title={Gradient Flow as the Primary Bottleneck in Recurrent Neural Networks:
-         An Empirical Analysis Against Transformers on Long-Sequence Tasks},
-  author={Firmandika, Rengga and Kachhadiya, Niramay and Karuhatty, Agni},
-  journal={USYD Deep Learning Course Conference},
-  year={2026}
-}
 ```
