@@ -6,9 +6,6 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# Results / outputs (large files)
-results/
-
 # Jupyter
 .ipynb_checkpoints/
 
