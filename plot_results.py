@@ -8,10 +8,11 @@ from pathlib import Path
 # ── Style ─────────────────────────────────────────────────────────────────────
 
 ARCH_STYLE = {
-    'rnn':         {'color': '#E24B4A', 'marker': 'o', 'label': 'Vanilla RNN'},
-    'lstm':        {'color': '#378ADD', 'marker': 's', 'label': 'LSTM'},
-    'gru':         {'color': '#1D9E75', 'marker': '^', 'label': 'GRU'},
-    'transformer': {'color': '#7F77DD', 'marker': 'D', 'label': 'Transformer'},
+    'rnn':          {'color': '#E24B4A', 'marker': 'o', 'label': 'Vanilla RNN'},
+    'lstm':         {'color': '#378ADD', 'marker': 's', 'label': 'LSTM'},
+    'gru':          {'color': '#1D9E75', 'marker': '^', 'label': 'GRU'},
+    'transformer':  {'color': '#7F77DD', 'marker': 'D', 'label': 'Transformer'},
+    'attention_rnn':{'color': '#F5A623', 'marker': 'P', 'label': 'RNN + Attention'},
 }
 
 def style(arch):
@@ -203,6 +204,60 @@ def print_summary_table():
     print(r"\bottomrule")
     print(r"\end{tabular}")
 
+# ── Figure 5: Study 5 — gradient path restoration ────────────────────────────
+
+def plot_study5():
+    if 'study_5' not in data:
+        print("Study 5 results not found — run run_study5.py first.")
+        return
+
+    results = data['study_5']
+    archs = ['rnn', 'attention_rnn', 'transformer']
+    by_arch = {a: {'k': [], 'input_grad': [], 'acc': []} for a in archs}
+
+    for r in results:
+        a = r['arch']
+        if a in by_arch:
+            by_arch[a]['k'].append(r['critical_pos'])
+            by_arch[a]['input_grad'].append(r['input_grad_norm'])
+            by_arch[a]['acc'].append(r['final_val_acc'])
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+
+    for arch in archs:
+        vals = by_arch[arch]
+        s    = style(arch)
+        idx  = np.argsort(vals['k'])
+        k    = np.array(vals['k'])[idx]
+        ig   = np.array(vals['input_grad'])[idx]
+        acc  = np.array(vals['acc'])[idx]
+
+        # replace zeros with a small value for log scale
+        ig = np.where(ig == 0, 1e-10, ig)
+
+        ax1.plot(k, ig,  color=s['color'], marker=s['marker'],
+                 label=s['label'], linewidth=1.5)
+        ax2.plot(k, acc, color=s['color'], marker=s['marker'],
+                 label=s['label'], linewidth=1.5)
+
+    ax1.set_xlabel('Critical token position k')
+    ax1.set_ylabel('Input gradient norm at position k')
+    ax1.set_title('Gradient signal: RNN vs RNN+Attention vs Transformer')
+    ax1.set_yscale('log')
+    ax1.legend(fontsize=8)
+
+    ax2.axhline(0.5, color='gray', linestyle='--', linewidth=0.8, label='Chance')
+    ax2.set_xlabel('Critical token position k')
+    ax2.set_ylabel('Validation accuracy')
+    ax2.set_title('Accuracy restored by attention augmentation')
+    ax2.legend(fontsize=8)
+    ax2.set_ylim(0.4, 1.05)
+
+    fig.tight_layout()
+    fig.savefig('results/figures/study5_intervention.pdf', bbox_inches='tight')
+    plt.close()
+    print("Saved study5_intervention.pdf")
+
 # ── Run all ───────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
@@ -210,4 +265,6 @@ if __name__ == '__main__':
     plot_study2()
     plot_study3()
     plot_study4()
+    if 'study_5' in data:
+        plot_study5()
     print_summary_table()
