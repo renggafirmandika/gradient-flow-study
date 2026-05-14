@@ -32,6 +32,7 @@ BATCH_SIZE = 128
 LR         = 1e-3
 TRAIN_SIZE = 8000
 VAL_SIZE   = 2000
+SEEDS      = [42, 123, 456]
 
 T = 500
 POSITIONS = [498, 400, 250, 100, 10, 1]
@@ -48,8 +49,10 @@ def make_model(arch):
                                      num_classes=NUM_CLASSES)
     raise ValueError(arch)
 
-def run_experiment(arch, critical_pos):
-    print(f"\n[{arch.upper()}] T={T} k={critical_pos}")
+def run_experiment(arch, critical_pos, seed=42):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    print(f"\n[{arch.upper()}] T={T} k={critical_pos} seed={seed}")
 
     train_loader = make_dataloader(TRAIN_SIZE, T, critical_pos, BATCH_SIZE)
     val_loader   = make_dataloader(VAL_SIZE,   T, critical_pos, BATCH_SIZE)
@@ -87,6 +90,7 @@ def run_experiment(arch, critical_pos):
         'arch':            arch,
         'seq_len':         T,
         'critical_pos':    critical_pos,
+        'seed':            seed,
         'final_val_acc':   history[-1]['val_acc'],
         'input_grad_norm': input_grad_norm,
         'history':         history,
@@ -98,7 +102,8 @@ if __name__ == '__main__':
     results = []
     for k in POSITIONS:
         for arch in ARCHS:
-            results.append(run_experiment(arch, k))
+            for seed in SEEDS:
+                results.append(run_experiment(arch, k, seed=seed))
 
     # Merge into existing results file if it exists, else save separately
     out_path = Path('results/all_results.json')

@@ -1,8 +1,8 @@
 # plot_results.py
 import json
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import numpy as np
+import matplotlib.pyplot as plt
+from collections import defaultdict
 from pathlib import Path
 
 # ── Style ─────────────────────────────────────────────────────────────────────
@@ -18,6 +18,25 @@ ARCH_STYLE = {
 def style(arch):
     return ARCH_STYLE[arch]
 
+# ── Aggregation helper ────────────────────────────────────────────────────────
+
+def aggregate(results, group_keys, value_keys):
+    """
+    Group results by group_keys, compute mean and std for each value_key.
+    Returns: {group_tuple: {value_key: (mean, std), ...}}
+    """
+    groups = defaultdict(lambda: defaultdict(list))
+    for r in results:
+        key = tuple(r[k] for k in group_keys)
+        for vk in value_keys:
+            val = r.get(vk)
+            if val is not None:
+                groups[key][vk].append(val)
+    return {
+        k: {vk: (np.mean(vs), np.std(vs)) for vk, vs in vals.items()}
+        for k, vals in groups.items()
+    }
+
 # ── Load results ──────────────────────────────────────────────────────────────
 
 with open('results/all_results.json') as f:
@@ -28,28 +47,39 @@ Path('results/figures').mkdir(exist_ok=True)
 # ── Figure 1: Study 1 — sequence length ──────────────────────────────────────
 
 def plot_study1():
-    results = data['study_1']
-    # Group by arch
-    by_arch = {a: {'T': [], 'acc': [], 'grad': []} for a in ARCH_STYLE}
-    for r in results:
-        a = r['arch']
-        by_arch[a]['T'].append(r['seq_len'])
-        by_arch[a]['acc'].append(r['final_val_acc'])
-        by_arch[a]['grad'].append(r['history'][-1]['mean_grad_norm'])
+    agg = aggregate(data['study_1'], ['arch', 'seq_len'],
+                    ['final_val_acc', 'input_grad_norm'])
+
+    by_arch = {a: {'T': [], 'acc_mean': [], 'acc_std': [], 'grad_mean': [], 'grad_std': []}
+               for a in ARCH_STYLE}
+
+    for (arch, T), vals in sorted(agg.items(), key=lambda x: x[0][1]):
+        if arch not in by_arch:
+            continue
+        by_arch[arch]['T'].append(T)
+        acc_m, acc_s   = vals.get('final_val_acc', (0, 0))
+        grad_m, grad_s = vals.get('input_grad_norm', (0, 0))
+        by_arch[arch]['acc_mean'].append(acc_m)
+        by_arch[arch]['acc_std'].append(acc_s)
+        by_arch[arch]['grad_mean'].append(grad_m)
+        by_arch[arch]['grad_std'].append(grad_s)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
 
     for arch, vals in by_arch.items():
+        if not vals['T']:
+            continue
         s = style(arch)
-        idx = np.argsort(vals['T'])
-        T   = np.array(vals['T'])[idx]
-        acc = np.array(vals['acc'])[idx]
-        grad = np.array(vals['grad'])[idx]
+        T        = np.array(vals['T'])
+        acc_m    = np.array(vals['acc_mean'])
+        acc_s    = np.array(vals['acc_std'])
+        grad_m   = np.array(vals['grad_mean'])
+        grad_s   = np.array(vals['grad_std'])
 
-        ax1.plot(T, acc,  color=s['color'], marker=s['marker'],
-                 label=s['label'], linewidth=1.5)
-        ax2.plot(T, grad, color=s['color'], marker=s['marker'],
-                 label=s['label'], linewidth=1.5)
+        ax1.errorbar(T, acc_m, yerr=acc_s, color=s['color'], marker=s['marker'],
+                     label=s['label'], linewidth=1.5, capsize=3)
+        ax2.errorbar(T, grad_m, yerr=grad_s, color=s['color'], marker=s['marker'],
+                     label=s['label'], linewidth=1.5, capsize=3)
 
     ax1.axhline(0.5, color='gray', linestyle='--', linewidth=0.8, label='Chance (50%)')
     ax1.set_xlabel('Sequence length T')
@@ -61,7 +91,7 @@ def plot_study1():
     ax2.set_xlabel('Sequence length T')
     ax2.set_ylabel('Mean gradient norm')
     ax2.set_title('Gradient norm vs sequence length')
-    ax2.set_yscale('log')          # log scale — norms span several orders of magnitude
+    ax2.set_yscale('log')
     ax2.legend(fontsize=8)
 
     fig.tight_layout()
@@ -72,27 +102,42 @@ def plot_study1():
 # ── Figure 2: Study 2 — critical position ────────────────────────────────────
 
 def plot_study2():
-    results = data['study_2']
-    by_arch = {a: {'k': [], 'input_grad': [], 'acc': []} for a in ARCH_STYLE}
-    for r in results:
-        a = r['arch']
-        by_arch[a]['k'].append(r['critical_pos'])
-        by_arch[a]['input_grad'].append(r['input_grad_norm'])
-        by_arch[a]['acc'].append(r['final_val_acc'])
+    agg = aggregate(data['study_2'], ['arch', 'critical_pos'],
+                    ['final_val_acc', 'input_grad_norm'])
+
+    by_arch = {a: {'k': [], 'acc_mean': [], 'acc_std': [], 'grad_mean': [], 'grad_std': []}
+               for a in ARCH_STYLE}
+
+    for (arch, k), vals in sorted(agg.items(), key=lambda x: x[0][1]):
+        if arch not in by_arch:
+            continue
+        by_arch[arch]['k'].append(k)
+        acc_m, acc_s   = vals.get('final_val_acc', (0, 0))
+        grad_m, grad_s = vals.get('input_grad_norm', (0, 0))
+        by_arch[arch]['acc_mean'].append(acc_m)
+        by_arch[arch]['acc_std'].append(acc_s)
+        by_arch[arch]['grad_mean'].append(grad_m)
+        by_arch[arch]['grad_std'].append(grad_s)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
 
     for arch, vals in by_arch.items():
+        if not vals['k']:
+            continue
         s = style(arch)
-        idx = np.argsort(vals['k'])
-        k    = np.array(vals['k'])[idx]
-        ig   = np.array(vals['input_grad'])[idx]
-        acc  = np.array(vals['acc'])[idx]
+        k      = np.array(vals['k'])
+        acc_m  = np.array(vals['acc_mean'])
+        acc_s  = np.array(vals['acc_std'])
+        grad_m = np.array(vals['grad_mean'])
+        grad_s = np.array(vals['grad_std'])
 
-        ax1.plot(k, ig,  color=s['color'], marker=s['marker'],
-                 label=s['label'], linewidth=1.5)
-        ax2.plot(k, acc, color=s['color'], marker=s['marker'],
-                 label=s['label'], linewidth=1.5)
+        # Replace zeros for log scale
+        grad_m_plot = np.where(grad_m == 0, 1e-10, grad_m)
+
+        ax1.errorbar(k, grad_m_plot, yerr=grad_s, color=s['color'], marker=s['marker'],
+                     label=s['label'], linewidth=1.5, capsize=3)
+        ax2.errorbar(k, acc_m, yerr=acc_s, color=s['color'], marker=s['marker'],
+                     label=s['label'], linewidth=1.5, capsize=3)
 
     ax1.set_xlabel('Critical token position k')
     ax1.set_ylabel('Input gradient norm at position k')
@@ -115,32 +160,32 @@ def plot_study2():
 # ── Figure 3: Study 3 — gradient clipping ────────────────────────────────────
 
 def plot_study3():
-    results = data['study_3']
-    clips = []
-    accs  = []
-    grads = []
+    agg = aggregate(data['study_3'], ['clip'],
+                    ['final_val_acc', 'input_grad_norm'])
 
-    for r in sorted(results, key=lambda x: x['clip'] or 999):
-        clips.append(str(r['clip']) if r['clip'] else 'None')
-        accs.append(r['final_val_acc'])
-        grads.append(r['history'][-1]['mean_grad_norm'])
+    clips_sorted = sorted(agg.keys(), key=lambda x: x[0] if x[0] is not None else 999)
+    clip_labels  = [str(c[0]) if c[0] is not None else 'None' for c in clips_sorted]
+    acc_means    = [agg[c]['final_val_acc'][0] for c in clips_sorted]
+    acc_stds     = [agg[c]['final_val_acc'][1] for c in clips_sorted]
+    grad_means   = [agg[c].get('input_grad_norm', (0, 0))[0] for c in clips_sorted]
+    grad_stds    = [agg[c].get('input_grad_norm', (0, 0))[1] for c in clips_sorted]
 
-    x = np.arange(len(clips))
+    x = np.arange(len(clip_labels))
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
 
     s = style('rnn')
-    ax1.bar(x, accs,  color=s['color'], alpha=0.8)
+    ax1.bar(x, acc_means, yerr=acc_stds, color=s['color'], alpha=0.8, capsize=4)
     ax1.axhline(0.5, color='gray', linestyle='--', linewidth=0.8, label='Chance')
-    ax1.set_xticks(x); ax1.set_xticklabels(clips)
+    ax1.set_xticks(x); ax1.set_xticklabels(clip_labels)
     ax1.set_xlabel('Gradient clip threshold')
     ax1.set_ylabel('Validation accuracy')
     ax1.set_title('Vanilla RNN: clipping vs accuracy')
     ax1.set_ylim(0.4, 1.05)
 
-    ax2.bar(x, grads, color=s['color'], alpha=0.8)
-    ax2.set_xticks(x); ax2.set_xticklabels(clips)
+    ax2.bar(x, grad_means, yerr=grad_stds, color=s['color'], alpha=0.8, capsize=4)
+    ax2.set_xticks(x); ax2.set_xticklabels(clip_labels)
     ax2.set_xlabel('Gradient clip threshold')
-    ax2.set_ylabel('Mean gradient norm')
+    ax2.set_ylabel('Input gradient norm')
     ax2.set_title('Vanilla RNN: clipping vs gradient norm')
     ax2.set_yscale('log')
 
@@ -152,22 +197,27 @@ def plot_study3():
 # ── Figure 4: Study 4 — depth ─────────────────────────────────────────────────
 
 def plot_study4():
-    results = data['study_4']
-    by_arch = {a: {'depth': [], 'acc': []} for a in ARCH_STYLE}
-    for r in results:
-        a = r['arch']
-        by_arch[a]['depth'].append(r['depth'])
-        by_arch[a]['acc'].append(r['final_val_acc'])
+    agg = aggregate(data['study_4'], ['arch', 'depth'], ['final_val_acc'])
+
+    by_arch = {a: {'depth': [], 'acc_mean': [], 'acc_std': []} for a in ARCH_STYLE}
+
+    for (arch, depth), vals in sorted(agg.items(), key=lambda x: x[0][1]):
+        if arch not in by_arch:
+            continue
+        by_arch[arch]['depth'].append(depth)
+        acc_m, acc_s = vals.get('final_val_acc', (0, 0))
+        by_arch[arch]['acc_mean'].append(acc_m)
+        by_arch[arch]['acc_std'].append(acc_s)
 
     fig, ax = plt.subplots(figsize=(6, 4))
 
     for arch, vals in by_arch.items():
+        if not vals['depth']:
+            continue
         s = style(arch)
-        idx = np.argsort(vals['depth'])
-        d   = np.array(vals['depth'])[idx]
-        acc = np.array(vals['acc'])[idx]
-        ax.plot(d, acc, color=s['color'], marker=s['marker'],
-                label=s['label'], linewidth=1.5)
+        ax.errorbar(vals['depth'], vals['acc_mean'], yerr=vals['acc_std'],
+                    color=s['color'], marker=s['marker'],
+                    label=s['label'], linewidth=1.5, capsize=3)
 
     ax.axhline(0.5, color='gray', linestyle='--', linewidth=0.8, label='Chance')
     ax.set_xlabel('Number of layers')
@@ -182,28 +232,6 @@ def plot_study4():
     plt.close()
     print("Saved study4_depth.pdf")
 
-# ── Table 1: Summary ──────────────────────────────────────────────────────────
-
-def print_summary_table():
-    """
-    Prints a LaTeX-ready table of final val accuracy and vanishing ratio
-    at T=500 from Study 1.
-    """
-    results = [r for r in data['study_1'] if r['seq_len'] == 500]
-    print("\n% Table 1 — paste into LaTeX")
-    print(r"\begin{tabular}{lccc}")
-    print(r"\toprule")
-    print(r"Architecture & Val Accuracy & Vanishing Ratio & Mean Grad Norm \\")
-    print(r"\midrule")
-    for r in sorted(results, key=lambda x: x['final_val_acc'], reverse=True):
-        last = r['history'][-1]
-        print(f"{r['arch'].upper()} & "
-              f"{r['final_val_acc']:.3f} & "
-              f"{last.get('vanishing_ratio', 0):.3f} & "
-              f"{last.get('mean_grad_norm', 0):.2e} \\\\")
-    print(r"\bottomrule")
-    print(r"\end{tabular}")
-
 # ── Figure 5: Study 5 — gradient path restoration ────────────────────────────
 
 def plot_study5():
@@ -211,34 +239,43 @@ def plot_study5():
         print("Study 5 results not found — run run_study5.py first.")
         return
 
-    results = data['study_5']
     archs = ['rnn', 'attention_rnn', 'transformer']
-    by_arch = {a: {'k': [], 'input_grad': [], 'acc': []} for a in archs}
+    agg = aggregate(data['study_5'], ['arch', 'critical_pos'],
+                    ['final_val_acc', 'input_grad_norm'])
 
-    for r in results:
-        a = r['arch']
-        if a in by_arch:
-            by_arch[a]['k'].append(r['critical_pos'])
-            by_arch[a]['input_grad'].append(r['input_grad_norm'])
-            by_arch[a]['acc'].append(r['final_val_acc'])
+    by_arch = {a: {'k': [], 'acc_mean': [], 'acc_std': [], 'grad_mean': [], 'grad_std': []}
+               for a in archs}
+
+    for (arch, k), vals in sorted(agg.items(), key=lambda x: x[0][1]):
+        if arch not in by_arch:
+            continue
+        by_arch[arch]['k'].append(k)
+        acc_m, acc_s   = vals.get('final_val_acc', (0, 0))
+        grad_m, grad_s = vals.get('input_grad_norm', (0, 0))
+        by_arch[arch]['acc_mean'].append(acc_m)
+        by_arch[arch]['acc_std'].append(acc_s)
+        by_arch[arch]['grad_mean'].append(grad_m)
+        by_arch[arch]['grad_std'].append(grad_s)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
 
     for arch in archs:
         vals = by_arch[arch]
-        s    = style(arch)
-        idx  = np.argsort(vals['k'])
-        k    = np.array(vals['k'])[idx]
-        ig   = np.array(vals['input_grad'])[idx]
-        acc  = np.array(vals['acc'])[idx]
+        if not vals['k']:
+            continue
+        s = style(arch)
+        k      = np.array(vals['k'])
+        acc_m  = np.array(vals['acc_mean'])
+        acc_s  = np.array(vals['acc_std'])
+        grad_m = np.array(vals['grad_mean'])
+        grad_s = np.array(vals['grad_std'])
 
-        # replace zeros with a small value for log scale
-        ig = np.where(ig == 0, 1e-10, ig)
+        grad_m_plot = np.where(grad_m == 0, 1e-10, grad_m)
 
-        ax1.plot(k, ig,  color=s['color'], marker=s['marker'],
-                 label=s['label'], linewidth=1.5)
-        ax2.plot(k, acc, color=s['color'], marker=s['marker'],
-                 label=s['label'], linewidth=1.5)
+        ax1.errorbar(k, grad_m_plot, yerr=grad_s, color=s['color'], marker=s['marker'],
+                     label=s['label'], linewidth=1.5, capsize=3)
+        ax2.errorbar(k, acc_m, yerr=acc_s, color=s['color'], marker=s['marker'],
+                     label=s['label'], linewidth=1.5, capsize=3)
 
     ax1.set_xlabel('Critical token position k')
     ax1.set_ylabel('Input gradient norm at position k')
@@ -257,6 +294,28 @@ def plot_study5():
     fig.savefig('results/figures/study5_intervention.pdf', bbox_inches='tight')
     plt.close()
     print("Saved study5_intervention.pdf")
+
+# ── Table 1: Summary ──────────────────────────────────────────────────────────
+
+def print_summary_table():
+    agg = aggregate(
+        [r for r in data['study_1'] if r['seq_len'] == 500],
+        ['arch'],
+        ['final_val_acc', 'input_grad_norm']
+    )
+    print("\n% Table 1 — paste into LaTeX")
+    print(r"\begin{tabular}{lcc}")
+    print(r"\toprule")
+    print(r"Architecture & Val Accuracy (mean $\pm$ std) & Input Grad Norm (mean $\pm$ std) \\")
+    print(r"\midrule")
+    for (arch,), vals in sorted(agg.items(), key=lambda x: -x[1]['final_val_acc'][0]):
+        acc_m, acc_s   = vals['final_val_acc']
+        grad_m, grad_s = vals.get('input_grad_norm', (0, 0))
+        print(f"{arch.upper()} & "
+              f"${acc_m:.3f} \\pm {acc_s:.3f}$ & "
+              f"${grad_m:.2e} \\pm {grad_s:.2e}$ \\\\")
+    print(r"\bottomrule")
+    print(r"\end{tabular}")
 
 # ── Run all ───────────────────────────────────────────────────────────────────
 

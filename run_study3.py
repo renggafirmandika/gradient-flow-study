@@ -20,14 +20,17 @@ BATCH_SIZE  = 128
 LR          = 1e-3
 TRAIN_SIZE  = 8000
 VAL_SIZE    = 2000
+SEEDS       = [42, 123, 456]
 
 T            = 500
 CRITICAL_POS = 250
 
 print(f"Device: {DEVICE}")
 
-def run_experiment(clip):
-    print(f"\n[RNN] T={T} k={CRITICAL_POS} clip={clip}")
+def run_experiment(clip, seed=42):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    print(f"\n[RNN] T={T} k={CRITICAL_POS} clip={clip} seed={seed}")
     train_loader = make_dataloader(TRAIN_SIZE, T, CRITICAL_POS, BATCH_SIZE)
     val_loader   = make_dataloader(VAL_SIZE,   T, CRITICAL_POS, BATCH_SIZE)
 
@@ -62,7 +65,7 @@ def run_experiment(clip):
 
     return {
         'arch': 'rnn', 'seq_len': T, 'critical_pos': CRITICAL_POS,
-        'clip': clip, 'depth': 1,
+        'clip': clip, 'depth': 1, 'seed': seed,
         'final_val_acc':   history[-1]['val_acc'],
         'input_grad_norm': input_grad_norm,
         'history':         history,
@@ -73,7 +76,8 @@ if __name__ == '__main__':
 
     results = []
     for clip in [None, 10.0, 5.0, 1.0, 0.1]:
-        results.append(run_experiment(clip))
+        for seed in SEEDS:
+            results.append(run_experiment(clip, seed=seed))
 
     out_path = Path('results/all_results.json')
     all_results = json.loads(out_path.read_text()) if out_path.exists() else {}

@@ -25,6 +25,7 @@ BATCH_SIZE  = 128
 LR          = 1e-3
 TRAIN_SIZE  = 8000
 VAL_SIZE    = 2000
+SEEDS       = [42, 123, 456]
 
 print(f"Device: {DEVICE}")
 
@@ -40,8 +41,10 @@ def make_model(arch, seq_len):
                                      num_layers=1, max_seq_len=seq_len,
                                      num_classes=NUM_CLASSES)
 
-def run_experiment(arch, seq_len, critical_pos):
-    print(f"\n[{arch.upper()}] T={seq_len} k={critical_pos}")
+def run_experiment(arch, seq_len, critical_pos, seed=42):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    print(f"\n[{arch.upper()}] T={seq_len} k={critical_pos} seed={seed}")
     train_loader = make_dataloader(TRAIN_SIZE, seq_len, critical_pos, BATCH_SIZE)
     val_loader   = make_dataloader(VAL_SIZE,   seq_len, critical_pos, BATCH_SIZE)
 
@@ -76,7 +79,7 @@ def run_experiment(arch, seq_len, critical_pos):
 
     return {
         'arch': arch, 'seq_len': seq_len, 'critical_pos': critical_pos,
-        'clip': None, 'depth': 1,
+        'clip': None, 'depth': 1, 'seed': seed,
         'final_val_acc':   history[-1]['val_acc'],
         'input_grad_norm': input_grad_norm,
         'history':         history,
@@ -88,7 +91,8 @@ if __name__ == '__main__':
     results = []
     for T in [50, 100, 200, 500, 1000]:
         for arch in ['rnn', 'lstm', 'gru', 'transformer']:
-            results.append(run_experiment(arch, seq_len=T, critical_pos=T-2))
+            for seed in SEEDS:
+                results.append(run_experiment(arch, seq_len=T, critical_pos=T-2, seed=seed))
 
     # Merge with existing results if present
     out_path = Path('results/all_results.json')

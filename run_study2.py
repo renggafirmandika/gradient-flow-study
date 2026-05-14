@@ -25,6 +25,7 @@ BATCH_SIZE  = 128
 LR          = 1e-3
 TRAIN_SIZE  = 8000
 VAL_SIZE    = 2000
+SEEDS       = [42, 123, 456]
 
 T = 500
 
@@ -42,8 +43,10 @@ def make_model(arch, seq_len):
                                      num_layers=1, max_seq_len=seq_len,
                                      num_classes=NUM_CLASSES)
 
-def run_experiment(arch, critical_pos):
-    print(f"\n[{arch.upper()}] T={T} k={critical_pos}")
+def run_experiment(arch, critical_pos, seed=42):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    print(f"\n[{arch.upper()}] T={T} k={critical_pos} seed={seed}")
     train_loader = make_dataloader(TRAIN_SIZE, T, critical_pos, BATCH_SIZE)
     val_loader   = make_dataloader(VAL_SIZE,   T, critical_pos, BATCH_SIZE)
 
@@ -78,7 +81,7 @@ def run_experiment(arch, critical_pos):
 
     return {
         'arch': arch, 'seq_len': T, 'critical_pos': critical_pos,
-        'clip': None, 'depth': 1,
+        'clip': None, 'depth': 1, 'seed': seed,
         'final_val_acc':   history[-1]['val_acc'],
         'input_grad_norm': input_grad_norm,
         'history':         history,
@@ -88,9 +91,10 @@ if __name__ == '__main__':
     Path('results').mkdir(exist_ok=True)
 
     results = []
-    for k in [498, 400, 250, 100, 10, 1]:
+    for k in [498, 400, 350, 300, 250, 200, 150, 100, 50, 25, 10, 1]:
         for arch in ['rnn', 'lstm', 'gru', 'transformer']:
-            results.append(run_experiment(arch, critical_pos=k))
+            for seed in SEEDS:
+                results.append(run_experiment(arch, critical_pos=k, seed=seed))
 
     out_path = Path('results/all_results.json')
     all_results = json.loads(out_path.read_text()) if out_path.exists() else {}
